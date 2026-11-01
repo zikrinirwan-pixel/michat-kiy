@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Z-Chat - Pesan Instan Real-Time</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PeerJS untuk Chat Real-Time Antar HP Tanpa Server Berbayar -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Google Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .wa-bg {
+            background-color: #efeae2;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 16px 16px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 flex justify-center items-center min-h-screen">
+
+    <!-- CONTAINER UTAMA (UKURAN HP) -->
+    <div class="w-full max-w-md h-screen bg-white flex flex-col shadow-2xl overflow-hidden relative">
+
+        <!-- ================= HEADER ALA WHATSAPP ================= -->
+        <header class="bg-[#075E54] text-white px-4 py-3 flex justify-between items-center shadow-md z-20">
+            <div class="flex items-center gap-3">
+                <div class="relative">
+                    <div class="w-10 h-10 rounded-full bg-emerald-200 text-[#075E54] flex items-center justify-center font-extrabold text-lg">
+                        <i class="fa-solid fa-user-astronaut"></i>
+                    </div>
+                    <span id="statusDot" class="w-3 h-3 rounded-full bg-amber-400 border-2 border-[#075E54] absolute bottom-0 right-0"></span>
+                </div>
+                <div>
+                    <h1 id="chatTitle" class="font-bold text-sm leading-tight">Belum Terhubung</h1>
+                    <p id="statusText" class="text-[11px] text-emerald-200">Menyiapkan ID kamu...</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="toggleDirectWA()" title="Kirim ke WA Asli" class="bg-white/10 hover:bg-white/20 p-2 rounded-full text-xs transition">
+                    <i class="fa-brands fa-whatsapp text-base text-emerald-300"></i>
+                </button>
+                <button onclick="clearChat()" title="Bersihkan Chat" class="bg-white/10 hover:bg-white/20 p-2 rounded-full text-xs transition">
+                    <i class="fa-solid fa-trash-can text-sm"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- ================= PANEL KONEKSI ID (PIN CHAT) ================= -->
+        <div class="bg-[#128C7E] text-white px-4 py-2.5 text-xs flex flex-col gap-2 shadow-inner z-10">
+            <div class="flex justify-between items-center">
+                <span>ID Kamu: <strong id="myIdDisplay" class="bg-black/20 px-2 py-0.5 rounded font-mono text-emerald-200 select-all">...</strong></span>
+                <button onclick="copyMyId()" class="text-[11px] bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded font-semibold">
+                    <i class="fa-regular fa-copy mr-1"></i>Salin ID
+                </button>
+            </div>
+            <div class="flex gap-1.5">
+                <input id="peerIdInput" type="text" placeholder="Masukkan ID teman untuk mulai chat..." class="w-full px-3 py-1.5 rounded-lg text-slate-800 text-xs focus:outline-none">
+                <button onclick="connectToPeer()" class="bg-emerald-950 hover:bg-slate-900 text-white font-bold px-3.5 py-1.5 rounded-lg whitespace-nowrap transition">
+                    Hubungkan
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= AREA PESAN (CHAT ROOM) ================= -->
+        <main id="chatBox" class="flex-1 wa-bg p-4 overflow-y-auto space-y-2.5 flex flex-col">
+            <div class="bg-amber-100/90 border border-amber-200 text-amber-900 text-[11px] p-2.5 rounded-xl text-center max-w-xs mx-auto shadow-sm">
+                <i class="fa-solid fa-lock text-amber-600 mr-1"></i>
+                <strong>Cara Pakai:</strong> Buka web ini di 2 HP berbeda. Salin <b>ID Kamu</b> lalu masukkan ke kolom koneksi di HP temanmu untuk chatting langsung!
+            </div>
+        </main>
+
+        <!-- ================= INPUT BAR BAWAH ================= -->
+        <footer class="bg-[#f0f2f5] p-2.5 flex items-center gap-2 border-t border-slate-200">
+            <input id="msgInput" type="text" placeholder="Ketik pesan..." onkeypress="if(event.key === 'Enter') sendMessage()" class="flex-1 bg-white px-4 py-2.5 rounded-full text-xs text-slate-800 border border-slate-200 focus:outline-none focus:border-[#128C7E]">
+            <button onclick="sendMessage()" class="w-10 h-10 rounded-full bg-[#128C7E] hover:bg-[#075E54] text-white flex items-center justify-center shadow-md transition">
+                <i class="fa-solid fa-paper-plane text-xs"></i>
+            </button>
+        </footer>
+
+        <!-- ================= MODAL KIRIM KE WA ASLI TANPA SIMPAN NOMOR ================= -->
+        <div id="waModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-xl">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                        <i class="fa-brands fa-whatsapp text-emerald-500 text-lg"></i> Tembak WA Tanpa Simpan Nomor
+                    </h3>
+                    <button onclick="toggleDirectWA()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <p class="text-[11px] text-slate-500">Kirim pesan langsung ke nomor WhatsApp mana pun tanpa perlu menyimpan kontaknya di HP.</p>
+                <input id="waNumber" type="tel" placeholder="Nomor WA Tujuan (Misal: 0831xxxx)" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500">
+                <textarea id="waText" rows="3" placeholder="Tulis isi pesan WhatsApp di sini..." class="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:border-emerald-500"></textarea>
+                <button onclick="sendToRealWA()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs py-3 rounded-xl transition">
+                    Buka & Kirim di WhatsApp
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Buat ID pendek acak 5 karakter biar gampang diketik di HP lain
+        const randomShortId = 'Z-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+        const peer = new Peer(randomShortId);
+        let conn = null;
+
+        const myIdDisplay = document.getElementById('myIdDisplay');
+        const statusText = document.getElementById('statusText');
+        const statusDot = document.getElementById('statusDot');
+        const chatTitle = document.getElementById('chatTitle');
+        const chatBox = document.getElementById('chatBox');
+
+        // Saat ID berhasil dibuat oleh server PeerJS
+        peer.on('open', (id) => {
+            myIdDisplay.innerText = id;
+            statusText.innerText = 'Online • Siap terhubung';
+            statusDot.className = 'w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#075E54] absolute bottom-0 right-0';
+        });
+
+        // Saat ada teman yang menghubungi ID kita
+        peer.on('connection', (connection) => {
+            conn = connection;
+            setupConnection();
+        });
+
+        // Fungsi menghubungi ID teman
+        function connectToPeer() {
+            const targetId = document.getElementById('peerIdInput').value.trim().toUpperCase();
+            if (!targetId) return alert('Masukkan ID teman terlebih dahulu!');
+            conn = peer.connect(targetId);
+            setupConnection();
+        }
+
+        function setupConnection() {
+            conn.on('open', () => {
+                chatTitle.innerText = 'Terhubung: ' + conn.peer;
+                statusText.innerText = 'Sedang Aktif (Real-Time)';
+                appendSystemMessage(`Terhubung dengan ${conn.peer}. Silakan mulai mengobrol!`);
+            });
+
+            conn.on('data', (data) => {
+                appendMessage(data, 'incoming');
+            });
+
+            conn.on('close', () => {
+                statusText.innerText = 'Koneksi terputus';
+                appendSystemMessage('Teman chat meninggalkan obrolan.');
+            });
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('msgInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            if (conn && conn.open) {
+                conn.send(text);
+                appendMessage(text, 'outgoing');
+                input.value = '';
+            } else {
+                // Jika belum terhubung ke teman, tetap tampilkan di layar sebagai mode uji coba
+                appendMessage(text, 'outgoing');
+                input.value = '';
+                setTimeout(() => {
+                    appendMessage('Ini balasan otomatis (Mode Demo). Hubungkan ID dengan HP lain untuk chat beneran!', 'incoming');
+                }, 800);
+            }
+        }
+
+        function appendMessage(text, type) {
+            const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const div = document.createElement('div');
+
+            if (type === 'outgoing') {
+                div.className = 'self-end bg-[#d9fdd3] text-slate-800 px-3.5 py-2 rounded-2xl rounded-tr-none max-w-[78%] shadow-sm text-xs';
+                div.innerHTML = `<p class="leading-relaxed break-words">${text}</p>
+                                 <div class="text-[9px] text-slate-500 text-right mt-1 flex items-center justify-end gap-1">
+                                    <span>${time}</span> <i class="fa-solid fa-check-double text-sky-500"></i>
+                                 </div>`;
+            } else {
+                div.className = 'self-start bg-white text-slate-800 px-3.5 py-2 rounded-2xl rounded-tl-none max-w-[78%] shadow-sm text-xs';
+                div.innerHTML = `<p class="leading-relaxed break-words">${text}</p>
+                                 <div class="text-[9px] text-slate-400 text-right mt-1">${time}</div>`;
+            }
+
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function appendSystemMessage(msg) {
+            const div = document.createElement('div');
+            div.className = 'bg-emerald-950/80 text-white text-[10px] px-3 py-1 rounded-full mx-auto my-1 shadow';
+            div.innerText = msg;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function copyMyId() {
+            navigator.clipboard.writeText(myIdDisplay.innerText);
+            alert('ID berhasil disalin: ' + myIdDisplay.innerText);
+        }
+
+        function clearChat() {
+            chatBox.innerHTML = '';
+        }
+
+        function toggleDirectWA() {
+            document.getElementById('waModal').classList.toggle('hidden');
+        }
+
+        function sendToRealWA() {
+            let num = document.getElementById('waNumber').value.trim().replace(/[^0-9]/g, '');
+            const msg = document.getElementById('waText').value.trim();
+            if (!num) return alert('Isi nomor WA tujuan dulu!');
+            if (num.startsWith('0')) num = '62' + num.substring(1);
+            window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+    </script>
+</body>
+</html>
